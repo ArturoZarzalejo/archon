@@ -1,6 +1,12 @@
-# Archon
+<p align="center">
+  <img src="public/logo-light.svg" alt="Archon" width="80" height="80" />
+</p>
 
-> The Storybook for AI Agents -- discover, visualize, and understand your agents.
+<h1 align="center">Archon</h1>
+
+<p align="center">
+  <strong>The Storybook for AI Agents</strong> — discover, visualize, lint, and test your agents.
+</p>
 
 ## What is Archon?
 

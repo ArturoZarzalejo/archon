@@ -127,20 +127,12 @@ export default function AgentImmersiveEmbed({ agent }: Props) {
           transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        <div className="flex flex-col items-center gap-4">
-          {/* Pulsing accent dot */}
-          <div className="relative">
-            <div
-              className="h-3 w-3 rounded-full"
-              style={{ backgroundColor: accent }}
-            />
-            <div
-              className="absolute inset-0 h-3 w-3 rounded-full animate-ping"
-              style={{ backgroundColor: accent, opacity: 0.4 }}
-            />
-          </div>
+        <div className="flex flex-col items-center gap-5">
+          {/* Logo */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-dark.svg" alt="Archon" className="h-10 w-10 opacity-80" />
           {/* Agent name */}
-          <span className="font-display text-sm font-semibold tracking-wider text-white/70">
+          <span className="font-display text-base font-bold tracking-wide text-white/80">
             {name}
           </span>
           {/* Subtle loading bar */}

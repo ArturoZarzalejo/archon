@@ -1,0 +1,5 @@
+<svg fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<path d="M50 10L85 80H70L50 40L30 80H15L50 10Z" fill="#f8f9fa"/>
+<path d="M50 25L70 70H60L50 50L40 70H30L50 25Z" fill="#00ffff"/>
+<circle cx="50" cy="55" fill="#2962ff" r="5" style="filter: drop-shadow(0 0 8px rgba(0,255,255,0.8))"/>
+</svg>

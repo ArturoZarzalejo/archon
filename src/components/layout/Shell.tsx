@@ -40,20 +40,18 @@ export function Shell({ children, agentCount }: ShellProps) {
           )}
         >
           {/* Logo */}
-          <Button
-            variant="default"
-            size="icon"
+          <Link
+            href="/"
             className={cn(
-              'h-10 w-10 rounded-xl font-display text-lg font-bold',
-              'transition-all hover:scale-105',
+              'flex h-10 w-10 items-center justify-center rounded-xl',
+              'bg-primary transition-all hover:scale-105',
               'hover:shadow-[0_0_16px_rgba(255,255,255,0.25)]',
               'active:scale-95'
             )}
-            nativeButton={false}
-            render={<Link href="/" />}
           >
-            A
-          </Button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-dark.svg" alt="Archon" className="h-7 w-7" />
+          </Link>
 
           <Separator className="w-8" />
 

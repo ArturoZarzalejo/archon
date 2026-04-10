@@ -1,0 +1,6 @@
+<svg fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<rect width="100" height="100" rx="20" fill="#191c1d"/>
+<path d="M50 15L82 78H68L50 42L32 78H18L50 15Z" fill="#f8f9fa"/>
+<path d="M50 28L68 68H58L50 52L42 68H32L50 28Z" fill="#2962ff"/>
+<circle cx="50" cy="55" fill="#00bfff" r="4.5" style="filter: drop-shadow(0 0 6px rgba(0,191,255,0.7))"/>
+</svg>
