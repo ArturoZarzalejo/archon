@@ -1,5 +1,5 @@
 {
-  "name": "archon",
+  "name": "agent-archon",
   "version": "0.1.0",
   "type": "module",
   "description": "The Storybook for AI Agents \u2014 discover, visualize, and understand your agents",
