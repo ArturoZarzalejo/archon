@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { ChevronUp, ChevronDown, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { NeuroNoise } from '@paper-design/shaders-react';
 
 const ENTER_ANIMATION: Record<string, string> = {
     bottom: 'spatial-enter-bottom',
@@ -114,10 +115,10 @@ export default function SpatialPanel({
         <div
             ref={ref}
             data-panel-id={panelId}
-            className="glass-highlight rounded-2xl overflow-hidden"
+            className="glass-highlight rounded-2xl overflow-hidden relative"
             style={{
                 '--spatial-accent': accent,
-                background: 'linear-gradient(135deg, rgba(10, 10, 30, 0.85), rgba(10, 10, 30, 0.75))',
+                background: 'linear-gradient(135deg, rgba(10, 10, 30, 0.88), rgba(10, 10, 30, 0.80))',
                 backdropFilter: 'blur(32px) saturate(1.5)',
                 WebkitBackdropFilter: 'blur(32px) saturate(1.5)',
                 border: `1px solid ${accent}33`,
@@ -132,9 +133,22 @@ export default function SpatialPanel({
             onAnimationEnd={handleAnimationEnd}
             onPointerDown={onPointerDown}
         >
+            {/* Shader background — subtle neural texture */}
+            <div className="absolute inset-0 rounded-2xl overflow-hidden opacity-[0.06] pointer-events-none">
+                <NeuroNoise
+                    colorFront={accent}
+                    colorMid={accent}
+                    colorBack="rgba(10,10,30,1)"
+                    speed={0.3}
+                    brightness={0.5}
+                    contrast={0.8}
+                    style={{ width: '100%', height: '100%' }}
+                />
+            </div>
+
             {/* Header */}
             {title && (
-                <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
+                <div className="relative z-10 flex items-center gap-2.5 px-4 pt-3 pb-2">
                     {icon && (
                         <div
                             className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
@@ -181,7 +195,7 @@ export default function SpatialPanel({
 
             {/* Content */}
             {!collapsed && (
-                <div className="px-4 pb-4" style={{ minHeight: height }}>
+                <div className="relative z-10 px-4 pb-4" style={{ minHeight: height }}>
                     {children}
                 </div>
             )}
