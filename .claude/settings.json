@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(npx tsx *)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo $TOOL_USE | jq -r .tool_input.file_path 2>/dev/null); if [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then npx tsc --noEmit --pretty 2>&1 | tail -5; fi; exit 0'"
+          }
+        ]
+      }
+    ]
+  }
+}
