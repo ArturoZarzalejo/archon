@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
@@ -509,67 +509,122 @@ function HealthTab({ agentId }: { agentId: string }) {
 /*  Playground tab                                                     */
 /* ------------------------------------------------------------------ */
 
+interface ToolCallEvent { name?: string; arguments?: string; phase?: string; index?: number }
+interface StreamStep { type: 'status' | 'token' | 'tool_call' | 'done' | 'error'; data: Record<string, unknown>; time: number }
+
 function PlaygroundTab({ agent }: { agent: Record<string, unknown> }) {
   const id = agent.id as string;
   const input = agent.input as Record<string, unknown> | undefined;
-  const output = agent.output as Record<string, unknown> | undefined;
   const model = agent.model as string | undefined;
   const provider = (agent.provider as string) ?? 'custom';
   const metrics = agent.metrics as Record<string, unknown> | undefined;
 
   const defaultInput = input?.example != null ? JSON.stringify(input.example, null, 2) : '{}';
   const [inputValue, setInputValue] = useState(defaultInput);
-  const [outputValue, setOutputValue] = useState<string | null>(null);
+  const [outputTokens, setOutputTokens] = useState('');
   const [running, setRunning] = useState(false);
   const [isMock, setIsMock] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [steps, setSteps] = useState<StreamStep[]>([]);
+  const [toolCalls, setToolCalls] = useState<ToolCallEvent[]>([]);
+  const [phase, setPhase] = useState<string>('idle');
+  const outputRef = useRef<HTMLDivElement>(null);
+  const startTime = useRef(0);
 
   const handleRun = useCallback(async () => {
     setRunning(true);
-    setOutputValue(null);
+    setOutputTokens('');
     setIsMock(null);
     setError(null);
+    setSteps([]);
+    setToolCalls([]);
+    setPhase('starting');
+    startTime.current = Date.now();
 
     try {
-      // Validate JSON input
       let parsedInput: unknown;
-      try {
-        parsedInput = JSON.parse(inputValue);
-      } catch {
-        setError('Invalid JSON input. Please fix the input and try again.');
-        setRunning(false);
-        return;
-      }
+      try { parsedInput = JSON.parse(inputValue); }
+      catch { setError('Invalid JSON input.'); setRunning(false); setPhase('idle'); return; }
 
-      const res = await fetch(`/api/agents/${encodeURIComponent(id)}/run`, {
+      const res = await fetch(`/api/agents/${encodeURIComponent(id)}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: parsedInput }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok && !data.output) {
-        setError(data.error ?? `Request failed with status ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text();
+        setError(`Request failed: ${res.status} ${text}`);
         setRunning(false);
+        setPhase('idle');
         return;
       }
 
-      if (data.error && data.mock) {
-        setError(data.error);
-      }
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      setIsMock(data.mock ?? true);
-      const formatted = data.output != null
-        ? (typeof data.output === 'string' ? data.output : JSON.stringify(data.output, null, 2))
-        : '{ "result": "No output returned" }';
-      setOutputValue(formatted);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop()!;
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.slice(7);
+            // Next line should be data:
+            const dataIdx = lines.indexOf(line) + 1;
+            // Actually, parse from buffer pattern
+            continue;
+          }
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            // Find the event type from the previous event: line
+            const eventLine = lines[lines.indexOf(line) - 1];
+            const eventType = eventLine?.startsWith('event: ') ? eventLine.slice(7) : 'unknown';
+
+            const step: StreamStep = { type: eventType as StreamStep['type'], data, time: Date.now() - startTime.current };
+
+            if (eventType === 'token') {
+              setOutputTokens(prev => prev + (data.content ?? ''));
+              // Auto-scroll
+              if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
+            }
+
+            if (eventType === 'tool_call') {
+              setToolCalls(prev => [...prev, data as ToolCallEvent]);
+            }
+
+            if (eventType === 'status') {
+              setPhase(String(data.phase ?? 'running'));
+            }
+
+            if (eventType === 'error') {
+              setError(String(data.message));
+            }
+
+            if (eventType === 'done') {
+              setIsMock(Boolean(data.mock));
+              setPhase('done');
+            }
+
+            setSteps(prev => [...prev, step]);
+          } catch { /* skip malformed */ }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
+      setPhase('idle');
     } finally {
       setRunning(false);
     }
   }, [id, inputValue]);
+
+  const elapsed = steps.length > 0 ? steps[steps.length - 1].time : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -581,9 +636,34 @@ function PlaygroundTab({ agent }: { agent: Record<string, unknown> }) {
         </div>
       )}
 
+      {/* Status bar — live execution steps */}
+      {running && (
+        <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-3 py-2">
+          <Loader2 size={14} className="animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground capitalize">{phase}...</span>
+          <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{elapsed}ms</span>
+        </div>
+      )}
+
+      {/* Tool calls — shown as steps */}
+      {toolCalls.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">Tool Calls</span>
+          {toolCalls.filter(tc => tc.name).map((tc, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <Wrench size={12} className="text-amber-400" />
+              <span className="font-mono font-medium text-foreground">{tc.name}</span>
+              {tc.arguments && (
+                <span className="truncate text-muted-foreground font-mono text-[10px]">({tc.arguments})</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Editor panels */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Left panel — Input */}
+        {/* Left — Input */}
         <Card className="border-border/40 bg-muted/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -595,66 +675,48 @@ function PlaygroundTab({ agent }: { agent: Record<string, unknown> }) {
             <Textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              className="min-h-[240px] resize-none rounded-lg border-border/30 bg-background/80 font-mono text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus-visible:border-ring"
+              className="min-h-[240px] resize-none rounded-lg border-border/30 bg-background/80 font-mono text-xs leading-relaxed"
               spellCheck={false}
             />
-            <Button
-              onClick={handleRun}
-              disabled={running}
-              className="w-full gap-2"
-            >
-              {running ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Play size={14} />
-              )}
-              {running ? 'Running...' : 'Run'}
+            <Button onClick={handleRun} disabled={running} className="w-full gap-2">
+              {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+              {running ? 'Streaming...' : 'Run'}
             </Button>
           </CardContent>
         </Card>
 
-        {/* Right panel — Output */}
+        {/* Right — Streaming Output */}
         <Card className="border-border/40 bg-muted/20">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <Code2 size={14} className="text-muted-foreground" />
                 Output
+                {running && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />}
               </CardTitle>
-              {outputValue != null && isMock !== null && (
+              {phase === 'done' && isMock !== null && (
                 isMock ? (
-                  <Badge variant="secondary" className="rounded-md text-[10px] bg-amber-500/10 text-amber-400">
-                    Mock Response (API key not configured)
-                  </Badge>
+                  <Badge variant="secondary" className="rounded-md text-[10px] bg-amber-500/10 text-amber-400">Mock</Badge>
                 ) : (
                   <Badge variant="secondary" className="rounded-md text-[10px] bg-emerald-500/10 text-emerald-400">
-                    Live Response
+                    Live · {elapsed}ms
                   </Badge>
                 )
               )}
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="min-h-[240px] rounded-lg border border-border/30 bg-background/80 p-4">
-              {running ? (
-                <div className="flex h-full min-h-[208px] items-center justify-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 size={20} className="animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Processing...</span>
-                  </div>
-                </div>
-              ) : outputValue != null ? (
-                <div className="max-h-[240px] overflow-y-auto scrollbar-hide">
-                  <pre className="font-mono text-xs leading-relaxed text-emerald-400"><code>{outputValue}</code></pre>
-                </div>
-              ) : (
+            <div ref={outputRef} className="min-h-[240px] max-h-[360px] overflow-y-auto scrollbar-hide rounded-lg border border-border/30 bg-background/80 p-4">
+              {outputTokens ? (
+                <pre className="font-mono text-xs leading-relaxed text-emerald-400 whitespace-pre-wrap"><code>{outputTokens}</code>{running && <span className="inline-block w-1.5 h-3.5 bg-emerald-400 animate-pulse ml-0.5 align-middle" />}</pre>
+              ) : !running ? (
                 <div className="flex h-full min-h-[208px] items-center justify-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Play size={24} className="opacity-30" />
-                    <span className="text-xs">Click Run to see output</span>
+                    <span className="text-xs">Click Run to stream output</span>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -676,23 +738,20 @@ function PlaygroundTab({ agent }: { agent: Record<string, unknown> }) {
           )}
           {metrics?.estimatedCostPer1k != null && (
             <Badge variant="secondary" className="gap-1.5 rounded-lg">
-              <DollarSign size={12} /> ~${String(metrics.estimatedCostPer1k)} per call
+              <DollarSign size={12} /> ~${String(metrics.estimatedCostPer1k)}/call
+            </Badge>
+          )}
+          {phase === 'done' && (
+            <Badge variant="secondary" className="gap-1.5 rounded-lg text-muted-foreground">
+              ~{Math.ceil(outputTokens.length / 4)} tokens
             </Badge>
           )}
         </div>
-        {isMock === null ? (
-          <span className="text-xs text-muted-foreground">
-            Calls the real AI API when a key is configured. Falls back to mock data otherwise.
-          </span>
-        ) : isMock ? (
-          <span className="text-xs text-amber-400">
-            Returned mock data. Set the provider API key to get live responses.
-          </span>
-        ) : (
-          <span className="text-xs text-emerald-400">
-            Live response from {provider} API.
-          </span>
-        )}
+        <span className="text-xs text-muted-foreground">
+          {phase === 'idle' && 'Streams tokens in real-time. Falls back to mock data without API keys.'}
+          {phase === 'done' && isMock && 'Mock response. Set the provider API key for live streaming.'}
+          {phase === 'done' && !isMock && `Streamed live from ${provider} API.`}
+        </span>
       </div>
     </div>
   );
