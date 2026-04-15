@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=$(echo $TOOL_USE | jq -r .tool_input.file_path 2>/dev/null); if [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then npx tsc --noEmit --pretty 2>&1 | tail -5; fi; exit 0'"
+            "command": "bash -c 'INPUT=$(cat); FILE_PATH=$(echo \"$INPUT\" | jq -r .tool_input.file_path 2>/dev/null); if [[ \"$FILE_PATH\" == *.ts || \"$FILE_PATH\" == *.tsx ]]; then npx tsc --noEmit --pretty 2>&1 | tail -5; fi; exit 0'"
           }
         ]
       }
